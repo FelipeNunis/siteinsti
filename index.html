@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Widget</title>
+    <style>
+        /* Estilos para o balão de chat e a janela principal */
+        #chat-bubble {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #0078d4; /* Cor azul do SharePoint/Microsoft */
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            z-index: 9999;
+        }
+
+        #chat-widget {
+            display: none; /* Começa escondido */
+            position: fixed;
+            bottom: 90px;
+            right: 20px;
+            width: 350px;
+            height: 500px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            background-color: white;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            z-index: 9998;
+        }
+
+        /* Área das mensagens */
+        #chat-messages {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .message {
+            padding: 8px 12px;
+            border-radius: 18px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .user-message {
+            background-color: #e1f5fe;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .bot-message {
+            background-color: #f1f1f1;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+
+        /* Área de input do usuário */
+        #chat-input-form {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #eee;
+        }
+
+        #chat-input {
+            flex-grow: 1;
+            border: 1px solid #ccc;
+            border-radius: 20px;
+            padding: 10px 15px;
+            font-size: 14px;
+        }
+
+        #send-button {
+            background-color: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            margin-left: 10px;
+            cursor: pointer;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="chat-bubble">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="bi bi-chat-dots" viewBox="0 0 16 16">
+            <path d="M5 8a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm4 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm4 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+            <path d="M2.165 15.803l.02-.004c1.83-.363 2.948-.842 3.468-1.105A9.06 9.06 0 0 0 8 15c4.418 0 8-3.134 8-7s-3.582-7-8-7-8 3.134-8 7c0 1.76.743 3.37 1.97 4.6a10.437 10.437 0 0 1-.524 2.318l-.003.011a10.722 10.722 0 0 1-.244.637c-.079.186.074.394.273.362a21.673 21.673 0 0 0 .693-.125zm.8-3.108a1 1 0 0 0-.287-.801C1.618 10.83 1 9.468 1 8c0-3.313 3.134-6 7-6s7 2.687 7 6-3.134 6-7 6a8.06 8.06 0 0 1-2.088-.272 1 1 0 0 0-.711.074c-.387.196-1.24.57-2.634.893a10.97 10.97 0 0 0 .398-2z"/>
+        </svg>
+    </div>
+
+    <div id="chat-widget" style="display: none;">
+        <div id="chat-messages">
+            <div class="message bot-message">Olá! Como posso ajudar você hoje?</div>
+        </div>
+        <form id="chat-input-form">
+            <input type="text" id="chat-input" placeholder="Digite sua mensagem..." autocomplete="off">
+            <button id="send-button" type="submit">&#10148;</button>
+        </form>
+    </div>
+
+<script>
+    // --- PARTE 1: REFERÊNCIAS AOS ELEMENTOS HTML ---
+    const chatBubble = document.getElementById('chat-bubble');
+    const chatWidget = document.getElementById('chat-widget');
+    const chatMessages = document.getElementById('chat-messages');
+    const chatInputForm = document.getElementById('chat-input-form');
+    const chatInput = document.getElementById('chat-input');
+    
+    // --- PARTE 2: CONFIGURAÇÃO PRINCIPAL ---
+    // !!!!! IMPORTANTE: SUBSTITUA PELA URL DO SEU WEBHOOK DO N8N !!!!!
+    const N8N_WEBHOOK_URL = 'https://americas.app.n8n.cloud/webhook/fb2d3fe9-ffe4-4619-8baf-99d6d19a2022';
+
+    // --- PARTE 3: LÓGICA DO CHAT ---
+
+    // Abrir/fechar o widget ao clicar no balão
+    chatBubble.addEventListener('click', () => {
+        const isHidden = chatWidget.style.display === 'none';
+        chatWidget.style.display = isHidden ? 'flex' : 'none';
+    });
+
+    // Enviar mensagem quando o formulário for submetido
+    chatInputForm.addEventListener('submit', (event) => {
+        event.preventDefault(); // Impede o recarregamento da página
+        const userInput = chatInput.value.trim();
+        if (userInput) {
+            sendMessageToN8n(userInput);
+        }
+    });
+    
+    // Função para mostrar mensagens na tela
+    function displayMessage(text, sender) {
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message', `${sender}-message`);
+        messageElement.textContent = text;
+        chatMessages.appendChild(messageElement);
+        // Rola para a mensagem mais recente
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Função principal que envia a mensagem para o n8n
+    async function sendMessageToN8n(userInput) {
+        // 1. Mostra a mensagem do usuário na tela imediatamente
+        displayMessage(userInput, 'user');
+        chatInput.value = ''; // Limpa o campo de input
+
+        try {
+            // 2. Envia a mensagem para o n8n usando a API fetch
+            const response = await fetch(N8N_WEBHOOK_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ message: userInput }) // Envia a mensagem do usuário
+            });
+
+            if (!response.ok) {
+                throw new Error('A resposta do n8n não foi OK.');
+            }
+
+            // 3. Recebe a resposta do n8n e a transforma em JSON
+            const data = await response.json();
+            
+            // 4. Mostra a resposta do bot na tela
+            // (Esperamos que o n8n envie um JSON com uma chave "answer")
+            if (data.answer) {
+                displayMessage(data.answer, 'bot');
+            } else {
+                displayMessage('Desculpe, não recebi uma resposta válida.', 'bot');
+            }
+
+        } catch (error) {
+            console.error('Erro ao contatar o n8n:', error);
+            displayMessage('Desculpe, estou com problemas para me conectar. Tente novamente mais tarde.', 'bot');
+        }
+    }
+</script>
+
+</body>
+</html>
